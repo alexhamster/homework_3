@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.2)
 
 project(allocator VERSION 0.0.$ENV{TRAVIS_BUILD_NUMBER})
 
@@ -7,7 +7,7 @@ project(allocator)
 add_executable(allocator main.cpp)
 
 set_target_properties(allocator PROPERTIES
-        CXX_STANDARD 14
+        CXX_STANDARD 17
         CXX_STANDARD_REQUIRED ON
         )
 
