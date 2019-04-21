@@ -21,13 +21,11 @@ struct logging_allocator {
 
 
     logging_allocator() {
-        //std::cout << __PRETTY_FUNCTION__ << "[n = " << byte_reserved << "]" << std::endl;
         _reserved_memory_ptr = reinterpret_cast<T *>(std::malloc(_byte_reserved));
         _free_memory_ptr = _reserved_memory_ptr;
 
     }
     ~logging_allocator() {
-        //std::cout << __PRETTY_FUNCTION__ << "[n = " << byte_reserved << "]" << std::endl;
         std::free(_reserved_memory_ptr);
     }
 
@@ -50,13 +48,11 @@ struct logging_allocator {
 
     template<typename U, typename ...Args>
     void construct(U *p, Args &&...args) {
-
         // we have to transfer arguments like a &&ref, because class U could have a move_ctor
         new(p) U(std::forward<Args>(args)...);
     }
 
     void destroy(T *p) {
-
         if(p != nullptr)
             p->~T();
     }
@@ -64,33 +60,12 @@ struct logging_allocator {
 
 template<typename T, typename U>
 struct MapNode {
-    using k_type = T;
-    using v_type = U;
 
-    k_type _key;
-    v_type _value;
-    MapNode *_nextElement;
+    T key;
+    U value;
+    MapNode* next;
 
-    MapNode(k_type key_, v_type value_, MapNode *nextElement_ = nullptr) :
-    _key(key_),
-    _value(value_),
-    _nextElement(nextElement_) {;}
-
-    k_type getKey() {
-        return _key;
-    }
-
-    v_type getValue() {
-        return _value;
-    }
-
-    MapNode* getNext() {
-        return _nextElement;
-    }
-
-    void setNext(MapNode* next_) {
-        _nextElement = next_;
-    }
+    MapNode(T t, U u) : key(t), value(u) { ; }
 };
 
 template<typename T, typename U, typename Allocator>
@@ -108,24 +83,23 @@ struct myMap {
 
         auto temp = _headElement;
         for(size_t i = 0; i < _size; i++) {
-            auto temp1 = temp->getNext();
+            auto temp1 = temp->next;
             _allocator.destroy(temp);
             temp = temp1;
         }
         _allocator.deallocate(_headElement, _size);
     }
 
-
     void add(const k_type&& key_, v_type&& value_) {
 
         MapNode<T,U>* temp = _allocator.allocate(1);
-        // (Fix 2) using std::forward to save type like a &&ref
+        // (Fix 2) using std::forward to save type &&ref
         _allocator.construct(temp, std::forward<const k_type>(key_), std::forward<v_type>(value_));
 
         if(_size == 0)
             _headElement = temp;
         else
-            _tailElement->setNext(temp);
+            _tailElement->next = temp;
 
         _tailElement = temp;
         _size++;
@@ -136,14 +110,13 @@ struct myMap {
         auto temp = _headElement;
         for(size_t i = 0; i < _size; i++) {
 
-            if(temp->getKey() == key_)
-                return temp->getValue();
+            if(temp->key == key_)
+                return temp->value;
 
-            temp = temp->getNext();
+            temp = temp->next;
         }
-        return _headElement->getValue();
+        return _headElement->value;
     }
-
 };
 
 void f1() {
