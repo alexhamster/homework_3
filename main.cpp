@@ -13,22 +13,22 @@ struct logging_allocator {
     using reference = T&;
     using const_reference = const T&;
 
-    std::size_t byte_reserved = sizeof(T)*R;
+    std::size_t _byte_reserved = sizeof(T)*R;
 
-    pointer reserved_memory_ptr = nullptr;
+    pointer _reserved_memory_ptr = nullptr;
 
-    pointer free_memory_ptr = nullptr;
+    pointer _free_memory_ptr = nullptr;
 
 
     logging_allocator() {
         //std::cout << __PRETTY_FUNCTION__ << "[n = " << byte_reserved << "]" << std::endl;
-        reserved_memory_ptr = reinterpret_cast<T *>(std::malloc(byte_reserved));
-        free_memory_ptr = reserved_memory_ptr;
+        _reserved_memory_ptr = reinterpret_cast<T *>(std::malloc(_byte_reserved));
+        _free_memory_ptr = _reserved_memory_ptr;
 
     }
     ~logging_allocator() {
         //std::cout << __PRETTY_FUNCTION__ << "[n = " << byte_reserved << "]" << std::endl;
-        std::free(reserved_memory_ptr);
+        std::free(_reserved_memory_ptr);
     }
 
     template<typename U>
@@ -37,11 +37,12 @@ struct logging_allocator {
     };
 
     T *allocate(std::size_t n) {
-        auto p = free_memory_ptr;
+        auto p = _free_memory_ptr;
         if (!p)
             throw std::bad_alloc();
 
-        free_memory_ptr += sizeof(value_type) * n;
+        _free_memory_ptr += n; // <======= (Fix 1) ptr arithmetic
+
         return reinterpret_cast<T *>(p);
     }
 
@@ -49,6 +50,8 @@ struct logging_allocator {
 
     template<typename U, typename ...Args>
     void construct(U *p, Args &&...args) {
+
+        // we have to transfer arguments like a &&ref, because class U could have a move_ctor
         new(p) U(std::forward<Args>(args)...);
     }
 
@@ -59,26 +62,25 @@ struct logging_allocator {
     }
 };
 
-
 template<typename T, typename U>
 struct MapNode {
-    using key_type = T;
-    using value_type = U;
+    using k_type = T;
+    using v_type = U;
 
-    key_type _key;
-    value_type _value;
+    k_type _key;
+    v_type _value;
     MapNode *_nextElement;
 
-    MapNode(key_type key_, value_type value_, MapNode *nextElement_ = nullptr) :
+    MapNode(k_type key_, v_type value_, MapNode *nextElement_ = nullptr) :
     _key(key_),
     _value(value_),
     _nextElement(nextElement_) {;}
 
-    key_type getKey() {
+    k_type getKey() {
         return _key;
     }
 
-    value_type getValue() {
+    v_type getValue() {
         return _value;
     }
 
@@ -93,8 +95,8 @@ struct MapNode {
 
 template<typename T, typename U, typename Allocator>
 struct myMap {
-    using key_type = T;
-    using value_type = U;
+    using k_type = T;
+    using v_type = U;
     typedef typename Allocator::template rebind<MapNode<T,U>>::other MyMapAllocator;
 
     MyMapAllocator _allocator;
@@ -103,6 +105,7 @@ struct myMap {
     size_t _size = 0;
 
     ~myMap() {
+
         auto temp = _headElement;
         for(size_t i = 0; i < _size; i++) {
             auto temp1 = temp->getNext();
@@ -113,9 +116,11 @@ struct myMap {
     }
 
 
-    void add(const key_type key_, value_type value_) {
+    void add(const k_type&& key_, v_type&& value_) {
+
         MapNode<T,U>* temp = _allocator.allocate(1);
-        _allocator.construct(temp, key_, value_);
+        // (Fix 2) using std::forward to save type like a &&ref
+        _allocator.construct(temp, std::forward<const k_type>(key_), std::forward<v_type>(value_));
 
         if(_size == 0)
             _headElement = temp;
@@ -126,7 +131,7 @@ struct myMap {
         _size++;
     }
 
-    value_type get(const key_type key_) {
+    v_type get(const k_type key_) {
 
         auto temp = _headElement;
         for(size_t i = 0; i < _size; i++) {
@@ -142,7 +147,7 @@ struct myMap {
 };
 
 void f1() {
-    //std map and std allocator
+
     std::cout << " === std::map and std::allocator ===" << std::endl;
     auto m = std::map<int, int, std::less<int>>{};
 
@@ -153,7 +158,7 @@ void f1() {
 }
 
 void f2() {
-    //std map and my allocator
+
     std::cout << " === std::map and my allocator ===" << std::endl;
     auto n = std::map<int, int, std::less<int>, logging_allocator<std::pair<const int, int>, 10>>{};
 
@@ -164,33 +169,42 @@ void f2() {
 }
 
 void f3() {
-    //my map and std::allocator
+
     std::cout << " === my map and std::allocator ===" << std::endl;
     auto r = myMap<int, int, std::allocator<MapNode<const int, int>>>{};
 
     for (size_t i = 0; i < 10; ++i) {
-        r.add(i, std::tgamma(i+1));
+        // (Fix 3) using std::move
+        r.add(std::move(i), std::move(std::tgamma(i+1)));
         std::cout << i << " " << r.get(i) << std::endl;
     }
 }
 
 void f4() {
-    //my map and my allocator
+
     std::cout << " === my map and my allocator ===" << std::endl;
     auto p = myMap<int, int, logging_allocator<std::pair<const int, int>, 10>>{};
 
     for (size_t i = 0; i < 10; ++i) {
-        p.add(i, std::tgamma(i+1));
+        // (Fix 3) using std::move
+        p.add(std::move(i), std::move(std::tgamma(i+1)));
         std::cout << i << " " << p.get(i) << std::endl;
     }
 }
 
 int main(int, char *[]) {
 
-    f1();
-    f2();
-    f3();
-    f4();
+    try {
+
+        f1();
+        f2();
+        f3();
+        f4();
+    }
+    catch(...)
+    {
+        std::cout << "Unknown error" << std::endl;
+    }
 
     return 0;
 }
