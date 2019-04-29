@@ -3,7 +3,6 @@
 #include <map>
 #include <cmath>
 
-
 template<typename T, size_t R>
 struct logging_allocator {
     using value_type = T;
@@ -19,11 +18,9 @@ struct logging_allocator {
 
     pointer _free_memory_ptr = nullptr;
 
-
     logging_allocator() {
         _reserved_memory_ptr = reinterpret_cast<T *>(std::malloc(_byte_reserved));
         _free_memory_ptr = _reserved_memory_ptr;
-
     }
     ~logging_allocator() {
         std::free(_reserved_memory_ptr);
@@ -39,7 +36,7 @@ struct logging_allocator {
         if (!p)
             throw std::bad_alloc();
 
-        _free_memory_ptr += n; // <======= (Fix 1) ptr arithmetic
+        _free_memory_ptr += n;
 
         return reinterpret_cast<T *>(p);
     }
@@ -48,7 +45,6 @@ struct logging_allocator {
 
     template<typename U, typename ...Args>
     void construct(U *p, Args &&...args) {
-        // we have to transfer arguments like a &&ref, because class U could have a move_ctor
         new(p) U(std::forward<Args>(args)...);
     }
 
@@ -85,15 +81,14 @@ struct myMap {
         for(size_t i = 0; i < _size; i++) {
             auto temp1 = temp->next;
             _allocator.destroy(temp);
+            _allocator.deallocate(temp, sizeof(temp));
             temp = temp1;
         }
-        _allocator.deallocate(_headElement, _size);
     }
 
     void add(const k_type&& key_, v_type&& value_) {
 
         MapNode<T,U>* temp = _allocator.allocate(1);
-        // (Fix 2) using std::forward to save type &&ref
         _allocator.construct(temp, std::forward<const k_type>(key_), std::forward<v_type>(value_));
 
         if(_size == 0)
@@ -147,7 +142,6 @@ void f3() {
     auto r = myMap<int, int, std::allocator<MapNode<const int, int>>>{};
 
     for (size_t i = 0; i < 10; ++i) {
-        // (Fix 3) using std::move
         r.add(std::move(i), std::move(std::tgamma(i+1)));
         std::cout << i << " " << r.get(i) << std::endl;
     }
@@ -159,7 +153,6 @@ void f4() {
     auto p = myMap<int, int, logging_allocator<std::pair<const int, int>, 10>>{};
 
     for (size_t i = 0; i < 10; ++i) {
-        // (Fix 3) using std::move
         p.add(std::move(i), std::move(std::tgamma(i+1)));
         std::cout << i << " " << p.get(i) << std::endl;
     }
